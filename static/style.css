@@ -130,6 +130,7 @@ p[is=sms-bubble] {
     max-width: 22em;
     max-height: 18em;
     margin-top: 0.3em;
+    cursor: zoom-in;
 }
 
 .break {
@@ -137,6 +138,19 @@ p[is=sms-bubble] {
     margin-top: 2em;
     margin-bottom: 2em;
     width: 5em;
-    /* background-color: green; */
     border-top: dotted 6px #AAA;
+}
+
+.basicLightbox .basicLightbox__placeholder {
+    max-width: 90%;
+    /* margin: 2em; */
+}
+
+.basicLightbox .modal {
+    /* max-width: 90%; */
+    overflow: hidden;
+}
+
+.basicLightbox .modal img {
+    /* max-width: 90%; */
 }

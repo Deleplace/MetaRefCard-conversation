@@ -26,6 +26,17 @@ class SMS extends HTMLElement {
         textMessage.setAttribute('class','bubble');
         textMessage.innerHTML = what;
 
+        const images = textMessage.querySelectorAll("img");
+        for (const image of images) {
+            // Setup image Lightboxes
+            image.addEventListener('click', function(event) {
+                let img = image.outerHTML;
+                basicLightbox.create(`
+                    <div class="modal">${img}</div>
+                `).show();
+            });
+        }
+
         // Apply external styles to the shadow dom
         const linkElem = document.createElement('link');
         linkElem.setAttribute('rel', 'stylesheet');
