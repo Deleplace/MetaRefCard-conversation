@@ -23,7 +23,7 @@
         What's HOTAS?
     </sms-valentin>
     <sms-ankur>
-        It's a flight simulator gaming thing. We generate such card pictures on-the-fly, server-side
+        It's a flight simulator gaming thing. We generate card images on-the-fly, server-side
     </sms-ankur>
     <sms-ankur again>
         <a href="https://github.com/ankurkotwal/MetaRefCard/blob/main/.github/images/fs2020_alphaflightcontrols.jpg" target="_blank">
@@ -67,7 +67,7 @@
         OK, let's tackle this by 2 sides.
         I'll read the code and try to reproduce the memory leak on my workstation. 
     </sms-valentin>
-    <sms-valentin>
+    <sms-valentin again>
         Meanwhile could you deploy to Cloud Run (low memory), launch a few dozens requests, and see if you actually
         experience any failures?
     </sms-valentin>
@@ -79,7 +79,9 @@
         So, I ran the tests with the -race flag, turns out there are some data races in the lazy init logic. I opened a <a href="https://github.com/ankurkotwal/MetaRefCard/pull/4/files">PR</a>.
     </sms-valentin>
     <sms-valentin again>
-        It's a cultural thing in the Go community, we don't improve programs that have data races, we pedantically regard them as broken 😂
+        It's a cultural thing in Go, if a program has data races, we pedantically regard it as broken 😂
+        <br/>
+        We want to fix the races before improving anything else
     </sms-valentin>
     <sms-valentin again>
         in this case, 
@@ -141,7 +143,7 @@
     </sms-ankur>
     <sms-valentin>
         You're 100% right, we must focus on the actual bottlenecks, and "writing the 
-        characters in the labels" is not one of them.
+        characters' pixels in the labels" is not one of them.
     </sms-valentin>
     <sms-valentin again>
         So, this is our CPU profile ()
