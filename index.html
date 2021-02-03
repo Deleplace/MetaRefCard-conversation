@@ -1,0 +1,157 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>The MetaRefCard performance conversation</title>
+  <meta name="author" content="Valentin Deleplace">
+  <link rel="stylesheet" href="static/style.css">
+</head>
+
+<body>
+<div class="conversation">
+    <sms-ankur>
+        Hey Valentin, I've heard you're into Go and performance
+    </sms-ankur>
+    <sms-ankur again>
+        would you have a look at my HOTAS image processing? Only if you can. Don't spend too much time on this.
+    </sms-ankur>
+    <sms-valentin>
+        Hi Ankur
+    </sms-valentin>
+    <sms-valentin again>
+        What's HOTAS?
+    </sms-valentin>
+    <sms-ankur>
+        It's a flight simulator gaming thing. We generate such card pictures on-the-fly, server-side
+    </sms-ankur>
+    <sms-ankur again>
+        <a href="https://github.com/ankurkotwal/MetaRefCard/blob/main/.github/images/fs2020_alphaflightcontrols.jpg" target="_blank">
+            <img src="static/img/metarefcard.jpg" />
+        </a>
+    </sms-ankur>
+    <sms-valentin>
+        Oooh very cool. Sure, I'd be happy to help.
+    </sms-valentin>
+    <sms-ankur>
+        The repo is here
+        <a href="https://github.com/ankurkotwal/MetaRefCard">
+            github.com/ankurkotwal/MetaRefCard
+        </a>
+    </sms-ankur>
+    <sms-ankur again>
+        I'm worried about a memory leak
+    </sms-ankur>
+    <sms-ankur again>
+        Also the image generation is kinda slow, which incurs a midly annoying user-facing latency
+    </sms-ankur>
+    <sms-valentin>
+        Ooh I see you've already written idiomatic tests and benchmarks! That's awesome,
+        it will make performance exploration much more straightforward 📈
+    </sms-valentin>
+    <sms-ankur>
+        I've run tests with 
+        <a href="https://blog.golang.org/pprof">Pprof</a>,
+        generated some call graphs... still not crystal clear for me
+    </sms-ankur>
+    <sms-ankur again>
+        Before I deploy to Cloud Run, I need to check if the image generation is likely to 
+        <a href="https://en.wikipedia.org/wiki/Out_of_memory">OOM</a>
+        the regular instance available memory.
+        <img src="static/img/cloud_run_memory.png" />
+    </sms-ankur>
+    <sms-ankur again>
+        I could pay more to have several GB, however a memory leak would still crash the instance every few requests 🙄
+    </sms-ankur>
+    <sms-valentin>
+        OK, let's tackle this by 2 sides.
+        I'll read the code and try to reproduce the memory leak on my workstation. 
+    </sms-valentin>
+    <sms-valentin>
+        Meanwhile could you deploy to Cloud Run (low memory), launch a few dozens requests, and see if you actually
+        experience any failures?
+    </sms-valentin>
+    <sms-ankur>
+        👌
+    </sms-ankur>
+    <div class=break> </div>
+    <sms-valentin>
+        So, I ran the tests with the -race flag, turns out there are some data races in the lazy init logic. I opened a <a href="https://github.com/ankurkotwal/MetaRefCard/pull/4/files">PR</a>.
+    </sms-valentin>
+    <sms-valentin again>
+        It's a cultural thing in the Go community, we don't improve programs that have data races, we pedantically regard them as broken 😂
+    </sms-valentin>
+    <sms-valentin again>
+        in this case, 
+        <a href="https://golang.org/pkg/sync/#Once">sync.Once</a>
+        and
+        <a href="https://golang.org/pkg/sync/#Map">sync.Map</a>
+        come to the rescue
+    </sms-valentin>
+    <sms-ankur>
+        Ah! Thanks, I'll merge it
+    </sms-ankur>
+    <sms-valentin>
+        When requests are processed sequentially, there doesn't seem to be any big memory usage.
+        E.g. this is using the 
+        <a href="https://making.pusher.com/go-tool-trace/">Trace viewer</a>,
+        it never gets above 20MB
+        <img src="static/img/trace_seq_small_mem.png" />
+    </sms-valentin>
+    <sms-ankur>
+        Correct. The problem occurs when requests are processed concurrently
+    </sms-ankur>
+    <sms-ankur>
+        which may happen often in production, as each request is taking several seconds to complete
+    </sms-ankur>
+    <sms-valentin>
+        Indeed when I launch a burst of 50 concurrent requests, I can see the memory usage 
+        climbing to 750MB
+        <img src="static/img/trace_conc_high_mem.png" />
+    </sms-valentin>
+    <sms-valentin again>
+        You know, sometimes the Go runtime allocates large chunks of memory that you actually need and
+        doesn't give them back quickly to the OS, and that's mostly OK? This doesn't 
+        always mean your code has any memory leak.
+    </sms-valentin>
+    <sms-valentin again>
+        As long as you don't OOM, it's fine if your program is occupying more memory than 
+        the amount your code's objects are actually using. It has some leeway. Maybe trust the GC? 🤷
+        <img src="static/img/heap_detail.png" />
+    </sms-valentin>
+    <sms-ankur>
+        I found this very suspicious at first, but okay I'll let the OS and the Go runtime
+        haggle over the memory heap, and hope for the best!
+    </sms-ankur>
+    <sms-ankur again>
+        Also I haven't noticed any OOM in Cloud Run so far, this is going good 🤞
+    </sms-ankur>
+    <div class=break> </div>
+    <sms-valentin>
+        I had a look at the latency problem
+    </sms-valentin>
+    <sms-valentin again>
+        You're drawing multiple text labels on the image in rectangles that don't 
+        overlap, so I thought of doing that concurrently
+    </sms-valentin>
+    <sms-ankur>
+        Nah, I thought the same, unfortunately the Font objects are no thread-safe.
+        And we don't even need to try harder with more clunky synchronization patterns,
+        because the text drawing is actually not the bottleneck!
+    </sms-ankur>
+    <sms-valentin>
+        You're 100% right, we must focus on the actual bottlenecks, and "writing the 
+        characters in the labels" is not one of them.
+    </sms-valentin>
+    <sms-valentin again>
+        So, this is our CPU profile ()
+        TODO
+    </sms-valentin>
+    <sms-valentin again>
+        TODO % of the total CPU time is spent encoding to JPEG.
+    </sms-valentin>
+
+    <script src="static/script.js"></script>
+</div>
+</body>
+</html>

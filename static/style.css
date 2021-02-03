@@ -1,0 +1,119 @@
+body {
+    background-color: #DDD;
+}
+
+.conversation {
+    min-width: 30em;
+    max-width: 45em;
+    margin: 0 auto;
+    margin-top: 2em;
+    padding-top: 2em;
+    background-color: #EEE;
+    border-radius: 2em;
+    padding-bottom: 2em;
+    margin-bottom: 2em;
+}
+
+sms-bubble {
+    background-color: green;
+}
+p[is=sms-bubble] {
+    background-color: red;
+}
+
+.wrapper {
+    margin-left: 1em;
+    margin-right: 1em;
+    margin-bottom: 0.5em;
+    min-height: 2em;
+    clear: both;
+}
+
+.avatar img {
+    float: left;
+    margin-top: -1em;
+    width: 3em;
+    border-radius: 50%;
+}
+
+.bubble {
+    position: relative;
+    display: table;
+    max-width: 70%;
+    margin-left: 3.6em;
+    margin-right: 4em;
+    padding: 0.5em;
+    background-color: #557;
+    color: white;
+    font-weight: bold;
+    margin-bottom: 0.5em;
+    border-radius: 2px;
+}
+
+.bubble a {
+    color: white;
+    text-decoration: underline 3px #CCC6;
+}
+
+.wrapper[who=ankur] .bubble:after {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 1.0em;
+	width: 0;
+	height: 0;
+	border: 11px solid transparent;
+	border-right-color: #555577;
+	border-left: 0;
+	border-top: 0;
+	margin-top: -5.5px;
+	margin-left: -11px;
+}
+
+
+.wrapper[who=valentin] .bubble {
+    float: right;
+    margin-left: 4em;
+    margin-right: 0.6em;
+    background-color: #33604f;
+}
+
+.wrapper[who=valentin] .bubble:after {
+	content: '';
+	position: absolute;
+	right: 0;
+    top: 1.0em;
+	width: 0;
+	height: 0;
+	border: 11px solid transparent;
+	border-left-color: #33604f;
+	border-right: 0;
+	border-top: 0;
+	margin-top: -5.5px;
+	margin-right: -11px;
+}
+
+.wrapper[who=valentin] .avatar img {
+    float:right;
+}
+
+.again .avatar {
+    /* Prevent showing the same photo multiple consecutive times */
+    visibility: hidden;
+}
+
+.bubble img {
+    display: block;
+    max-width: 22em;
+    max-height: 18em;
+    margin-top: 0.3em;
+}
+
+.break {
+    margin: 0 auto;
+    margin-top: 2em;
+    margin-bottom: 2em;
+    width: 5em;
+    /* background-color: green; */
+    border-top: dotted 6px #AAA;
+}
