@@ -116,6 +116,12 @@
         always mean your code has any memory leak.
     </sms-valentin>
     <sms-valentin again>
+        Even if we 
+        <a href="https://golang.org/pkg/runtime/#GC">explicitly trigger</a>
+        the garbage collection after each request, often the program doesn't 
+        seems to release any memory...
+    </sms-valentin>
+    <sms-valentin again>
         As long as you don't OOM, it's fine if your program is occupying more memory than 
         the amount your code's objects are actually using. It has some leeway. Maybe trust the GC? 🤷
         <img src="static/img/heap_detail.png" />
