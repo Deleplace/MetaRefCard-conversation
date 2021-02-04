@@ -161,8 +161,68 @@
         Did you know the drop-in encoder replacement
         <a href="https://github.com/pixiv/go-libjpeg/tree/master/jpeg">
             github.com/pixiv/go-libjpeg/jpeg
-        </a>? It can encode 5 times as fast, shaving 15% of the total time.
+        </a>? It can encode 5 times as fast, shaving 15% of the total time. That's a quick win 😉
     </sms-valentin>
+    <sms-valentin again>
+        Updated CPU profile
+        <img src="static/img/pprof_2.png" />
+    </sms-valentin>
+    <sms-valentin again>
+        Now trying to figure out why so much time (15s) is sunk in generateImages, while
+        (decode image + draw labels + encode image) is only (3s + 1.1s + 0.6s) = 4.7s...
+    </sms-valentin>
+    <sms-valentin again>
+        Allright, here's what's going on.
+        <br/>
+        You have a configurable background color, so the process is 
+        <ul>
+            <li>create a blank RGBA image</li>
+            <li>fill it with the custom background color</li>
+            <li>draw the card model PNG on top (it has transparency)</li>
+            <li>draw the card text labels</li>
+        </ul>
+    </sms-valentin>
+    <sms-valentin again>
+        for some reason, drawing the model card converts each pixel between 
+        <a href="https://golang.org/pkg/image/color/#NRGBA">NRGBA</a> 
+        and 
+        <a href="https://golang.org/pkg/image/color/#RGBA">RGBA</a>,
+        and that's super slow 
+        <img src="static/img/pprof_3.png" />
+    </sms-valentin>
+    <sms-valentin again>
+        okay, mixing "non-alpha-premultiplied" with "alpha-premultiplied" might
+        incur some arithmetic extra burden. However, I tried to tweak the code 
+        to deal only with RGBA, but no gain! 
+        <br/>
+        transform_RGBA_RGBA_Over seems just as expensive 🤷
+    </sms-valentin>
+    <sms-ankur>
+        That's an interesting rabbit hole
+    </sms-ankur>
+    <sms-ankur again>
+        You know what? Choosing the background color is not a core feature of
+        my website. I can totally live with a default background color "baked" into the 
+        original model card PNG, instead of doing that dynamically each time.
+    </sms-ankur>
+    <sms-valentin>
+        or maybe 3 or 4 variants of the PNG with different pre-baked background colors
+    </sms-valentin>
+    <div class=break> </div>
+    <sms-ankur>
+        Hey, I deployed to Cloud Run with your these optimizations:
+        baked in background color, alternative JPEG encoder
+    </sms-ankur>
+    <sms-ankur>
+        It's way faster now! 🎉
+        <br/>
+        Thank you for your help!
+    </sms-ankur>
+    <sms-valentin>
+        🥳
+    </sms-valentin>
+
+
 
     <script src="static/basiclightbox/basicLightbox.min.js"></script>
     <script src="static/script.js"></script>
