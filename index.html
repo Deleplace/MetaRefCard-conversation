@@ -34,7 +34,7 @@
     </sms-valentin>
     <sms-ankur>
         The repo is here
-        <a href="https://github.com/ankurkotwal/MetaRefCard">
+        <a href="https://github.com/ankurkotwal/MetaRefCard" target="_blank">
             github.com/ankurkotwal/MetaRefCard
         </a>
     </sms-ankur>
@@ -50,12 +50,12 @@
     </sms-valentin>
     <sms-ankur>
         I've run tests with 
-        <a href="https://blog.golang.org/pprof">Pprof</a>,
+        <a href="https://blog.golang.org/pprof" target="_blank">Pprof</a>,
         generated some call graphs... still not crystal clear for me
     </sms-ankur>
     <sms-ankur again>
         Before I deploy to Cloud Run, I need to check if the image generation is likely to 
-        <a href="https://en.wikipedia.org/wiki/Out_of_memory">OOM</a>
+        <a href="https://en.wikipedia.org/wiki/Out_of_memory" target="_blank">OOM</a>
         the regular instance available memory.
         <img src="static/img/cloud_run_memory.png" />
     </sms-ankur>
@@ -75,7 +75,9 @@
     </sms-ankur>
     <div class=break> </div>
     <sms-valentin>
-        So, I ran the tests with the -race flag, turns out there are some data races in the lazy init logic. I opened a <a href="https://github.com/ankurkotwal/MetaRefCard/pull/4/files">PR</a>.
+        So, I ran the tests with the -race flag, turns out there are some data races in the lazy init logic. I opened a 
+        <a href="https://github.com/ankurkotwal/MetaRefCard/pull/4/files" target="_blank">PR</a>
+        .
     </sms-valentin>
     <sms-valentin again>
         It's a cultural thing in Go, if a program has data races, we pedantically regard it as broken 😂
@@ -84,9 +86,9 @@
     </sms-valentin>
     <sms-valentin again>
         in this case, 
-        <a href="https://golang.org/pkg/sync/#Once">sync.Once</a>
+        <a href="https://golang.org/pkg/sync/#Once" target="_blank">sync.Once</a>
         and
-        <a href="https://golang.org/pkg/sync/#Map">sync.Map</a>
+        <a href="https://golang.org/pkg/sync/#Map" target="_blank">sync.Map</a>
         come to the rescue
     </sms-valentin>
     <sms-ankur>
@@ -95,7 +97,7 @@
     <sms-valentin>
         When requests are processed sequentially, there doesn't seem to be any big memory usage.
         E.g. this is using the 
-        <a href="https://making.pusher.com/go-tool-trace/">Trace viewer</a>,
+        <a href="https://making.pusher.com/go-tool-trace/" target="_blank">Trace viewer</a>,
         it never gets above 20MB
         <img src="static/img/trace_seq_small_mem.png" />
     </sms-valentin>
@@ -117,7 +119,7 @@
     </sms-valentin>
     <sms-valentin again>
         Even if we 
-        <a href="https://golang.org/pkg/runtime/#GC">explicitly trigger</a>
+        <a href="https://golang.org/pkg/runtime/#GC" target="_blank">explicitly trigger</a>
         the garbage collection after each request, often the program doesn't 
         seems to release any memory...
     </sms-valentin>
@@ -142,7 +144,9 @@
         overlap, so I thought of doing that concurrently
     </sms-valentin>
     <sms-ankur>
-        Nah, I thought the same, unfortunately the Font objects are no thread-safe.
+        Nah, I thought the same, unfortunately the 
+        <a href="https://pkg.go.dev/golang.org/x/image@v0.0.0-20201208152932-35266b937fa6/font#Face" target="_blank">Font Face</a> 
+        objects are no thread-safe.
         And we don't even need to try harder with more clunky synchronization patterns,
         because the text drawing is actually not the bottleneck!
     </sms-ankur>
@@ -158,7 +162,7 @@
         18% of the total CPU time is spent encoding to JPEG.
     </sms-valentin>
     <sms-valentin again>
-        Did you know the drop-in encoder replacement
+        Did you know about the drop-in encoder replacement
         <a href="https://github.com/pixiv/go-libjpeg/tree/master/jpeg">
             github.com/pixiv/go-libjpeg/jpeg
         </a>? It can encode 5 times as fast, shaving 15% of the total time. That's a quick win 😉
@@ -183,19 +187,26 @@
         </ul>
     </sms-valentin>
     <sms-valentin again>
-        for some reason, drawing the model card converts each pixel between 
-        <a href="https://golang.org/pkg/image/color/#NRGBA">NRGBA</a> 
-        and 
-        <a href="https://golang.org/pkg/image/color/#RGBA">RGBA</a>,
-        and that's super slow 
+        for the 3rd step, the library
+        <a href="https://github.com/fogleman/gg" target="_blank">fogleman/gg</a>
+        uses the
+        <a href="https://pkg.go.dev/golang.org/x/image@v0.0.0-20201208152932-35266b937fa6/draw#BiLinear" target="_blank">BiLinear</a>
+        transformer, which is officially "slow" and incurs a lot of 
+        <a href="https://golang.org/pkg/image/color/#NRGBA" target="_blank">NRGBA</a> 
+        /
+        <a href="https://golang.org/pkg/image/color/#RGBA" target="_blank">RGBA</a>
+        computations
         <img src="static/img/pprof_3.png" />
+        The choice of the BiLinear kernel in gg is not configurable.
     </sms-valentin>
     <sms-valentin again>
-        okay, mixing "non-alpha-premultiplied" with "alpha-premultiplied" might
-        incur some arithmetic extra burden. However, I tried to tweak the code 
-        to deal only with RGBA, but no gain! 
+        I thought that mixing "non-alpha-premultiplied" with "alpha-premultiplied" might
+        incur some arithmetic extra burden. Then I realized BiLinear was the problem.
         <br/>
-        transform_RGBA_RGBA_Over seems just as expensive 🤷
+        Even if there's no option for that, the library is open source so we could hack
+        it to use e.g. 
+        <a href="https://pkg.go.dev/golang.org/x/image@v0.0.0-20201208152932-35266b937fa6/draw#ApproxBiLinear" target="_blank">ApproxBiLinear</a>
+        instead and see if the quality is high enough
     </sms-valentin>
     <sms-ankur>
         That's an interesting rabbit hole
@@ -210,7 +221,7 @@
     </sms-valentin>
     <div class=break> </div>
     <sms-ankur>
-        Hey, I deployed to Cloud Run with your these optimizations:
+        Hey, I deployed to Cloud Run with these optimizations:
         baked in background color, alternative JPEG encoder
     </sms-ankur>
     <sms-ankur>

@@ -130,7 +130,12 @@ p[is=sms-bubble] {
     max-width: 22em;
     max-height: 18em;
     margin-top: 0.3em;
+    margin-bottom: 0.3em;
     cursor: zoom-in;
+}
+
+.bubble ul {
+    margin: 0;
 }
 
 .break {
