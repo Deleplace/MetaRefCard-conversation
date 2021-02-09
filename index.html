@@ -1,242 +1,249 @@
 <!doctype html>
 
 <html lang="en">
+
 <head>
-  <meta charset="utf-8">
-  <title>The MetaRefCard performance conversation</title>
-  <meta name="author" content="Valentin Deleplace">
-  <link rel="stylesheet" href="static/basiclightbox/basicLightbox.min.css">
-  <link rel="stylesheet" href="static/style.css">
+    <meta charset="utf-8">
+    <title>The MetaRefCard performance conversation</title>
+    <meta name="author" content="Valentin Deleplace">
+    <link rel="stylesheet" href="static/basiclightbox/basicLightbox.min.css">
+    <link rel="stylesheet" href="static/style.css">
 </head>
 
 <body>
-<div class="conversation">
-    <sms-ankur>
-        Hey Valentin, I've heard you're into Go and performance
-    </sms-ankur>
-    <sms-ankur again>
-        would you have a look at my HOTAS image processing? Only if you can. Don't spend too much time on this.
-    </sms-ankur>
-    <sms-valentin>
-        Hi Ankur
-    </sms-valentin>
-    <sms-valentin again>
-        What's HOTAS?
-    </sms-valentin>
-    <sms-ankur>
-        It's a flight simulator gaming thing. We generate card images on-the-fly, server-side
-    </sms-ankur>
-    <sms-ankur again>
-        <img src="static/img/metarefcard.jpg" />
-    </sms-ankur>
-    <sms-valentin>
-        Oooh very cool. Sure, I'd be happy to help.
-    </sms-valentin>
-    <sms-ankur>
-        The repo is here
-        <a href="https://github.com/ankurkotwal/MetaRefCard" target="_blank">
-            github.com/ankurkotwal/MetaRefCard
-        </a>
-    </sms-ankur>
-    <sms-ankur again>
-        I'm worried about a memory leak
-    </sms-ankur>
-    <sms-ankur again>
-        Also the image generation is kinda slow, which incurs a midly annoying user-facing latency
-    </sms-ankur>
-    <sms-valentin>
-        Ooh I see you've already written idiomatic tests and benchmarks! That's awesome,
-        it will make performance exploration much more straightforward 📈
-    </sms-valentin>
-    <sms-ankur>
-        I've run tests with 
-        <a href="https://blog.golang.org/pprof" target="_blank">Pprof</a>,
-        generated some call graphs... still not crystal clear for me
-    </sms-ankur>
-    <sms-ankur again>
-        Before I deploy to Cloud Run, I need to check if the image generation is likely to 
-        <a href="https://en.wikipedia.org/wiki/Out_of_memory" target="_blank">OOM</a>
-        the regular instance available memory.
-        <img src="static/img/cloud_run_memory.png" />
-    </sms-ankur>
-    <sms-ankur again>
-        I could pay more to have several GB, however a memory leak would still crash the instance every few requests 🙄
-    </sms-ankur>
-    <sms-valentin>
-        OK, let's tackle this by 2 sides.
-        I'll read the code and try to reproduce the memory leak on my workstation. 
-    </sms-valentin>
-    <sms-valentin again>
-        Meanwhile could you deploy to Cloud Run (low memory), launch a few dozens requests, and see if you actually
-        experience any failures?
-    </sms-valentin>
-    <sms-ankur>
-        👌
-    </sms-ankur>
-    <div class=break> </div>
-    <sms-valentin>
-        So, I ran the tests with the -race flag, turns out there are some data races in the lazy init logic. I opened a 
-        <a href="https://github.com/ankurkotwal/MetaRefCard/pull/4/files" target="_blank">PR</a>
-        .
-    </sms-valentin>
-    <sms-valentin again>
-        It's a cultural thing in Go, if a program has data races, we pedantically regard it as broken 😂
-        <br/>
-        We want to fix the races before improving anything else
-    </sms-valentin>
-    <sms-valentin again>
-        in this case, 
-        <a href="https://golang.org/pkg/sync/#Once" target="_blank">sync.Once</a>
-        and
-        <a href="https://golang.org/pkg/sync/#Map" target="_blank">sync.Map</a>
-        come to the rescue
-    </sms-valentin>
-    <sms-ankur>
-        Ah! Thanks, I'll merge it
-    </sms-ankur>
-    <sms-valentin>
-        When requests are processed sequentially, there doesn't seem to be any big memory usage.
-        E.g. this is using the 
-        <a href="https://making.pusher.com/go-tool-trace/" target="_blank">Trace viewer</a>,
-        it never gets above 20MB
-        <img src="static/img/trace_seq_small_mem.png" />
-    </sms-valentin>
-    <sms-ankur>
-        Correct. The problem occurs when requests are processed concurrently
-    </sms-ankur>
-    <sms-ankur>
-        which may happen often in production, as each request is taking several seconds to complete
-    </sms-ankur>
-    <sms-valentin>
-        Indeed when I launch a burst of 50 concurrent requests, I can see the memory usage 
-        climbing to 750MB
-        <img src="static/img/trace_conc_high_mem.png" />
-    </sms-valentin>
-    <sms-valentin again>
-        You know, sometimes the Go runtime allocates large chunks of memory that you actually need and
-        doesn't give them back quickly to the OS, and that's mostly OK? This doesn't 
-        always mean your code has any memory leak.
-    </sms-valentin>
-    <sms-valentin again>
-        Even if we 
-        <a href="https://golang.org/pkg/runtime/#GC" target="_blank">explicitly trigger</a>
-        the garbage collection after each request, often the program doesn't 
-        seems to release any memory...
-    </sms-valentin>
-    <sms-valentin again>
-        As long as you don't OOM, it's fine if your program is occupying more memory than 
-        the amount your code's objects are actually using. It has some leeway. Maybe trust the GC? 🤷
-        <img src="static/img/heap_detail.png" />
-    </sms-valentin>
-    <sms-ankur>
-        I found this very suspicious at first, but okay I'll let the OS and the Go runtime
-        haggle over the memory heap, and hope for the best!
-    </sms-ankur>
-    <sms-ankur again>
-        Also I haven't noticed any OOM in Cloud Run so far, this is going good 🤞
-    </sms-ankur>
-    <div class=break> </div>
-    <sms-valentin>
-        I had a look at the latency problem
-    </sms-valentin>
-    <sms-valentin again>
-        You're drawing multiple text labels on the image in rectangles that don't 
-        overlap, so I thought of doing that concurrently
-    </sms-valentin>
-    <sms-ankur>
-        Nah, I thought the same, unfortunately the 
-        <a href="https://pkg.go.dev/golang.org/x/image@v0.0.0-20201208152932-35266b937fa6/font#Face" target="_blank">Font Face</a> 
-        objects are no thread-safe.
-        And we don't even need to try harder with more clunky synchronization patterns,
-        because the text drawing is actually not the bottleneck!
-    </sms-ankur>
-    <sms-valentin>
-        You're 100% right, we must focus on the actual bottlenecks, and "writing the 
-        characters' pixels in the labels" is not one of them.
-    </sms-valentin>
-    <sms-valentin again>
-        So, this is our CPU profile
-        <img src="static/img/pprof_overview.png" />
-    </sms-valentin>
-    <sms-valentin again>
-        18% of the total CPU time is spent encoding to JPEG.
-    </sms-valentin>
-    <sms-valentin again>
-        Did you know about the drop-in encoder replacement
-        <a href="https://github.com/pixiv/go-libjpeg/tree/master/jpeg">
-            github.com/pixiv/go-libjpeg/jpeg
-        </a>? It can encode 5 times as fast, shaving 15% of the total time. That's a quick win 😉
-    </sms-valentin>
-    <sms-valentin again>
-        Updated CPU profile
-        <img src="static/img/pprof_2.png" />
-    </sms-valentin>
-    <sms-valentin again>
-        Now trying to figure out why so much time (15s) is sunk in generateImages, while
-        (decode image + draw labels + encode image) is only (3s + 1.1s + 0.6s) = 4.7s...
-    </sms-valentin>
-    <sms-valentin again>
-        Allright, here's what's going on.
-        <br/>
-        You have a configurable background color, so the process is 
-        <ul>
-            <li>create a blank RGBA image</li>
-            <li>fill it with the custom background color</li>
-            <li>draw the card model PNG on top (it has transparency)</li>
-            <li>draw the card text labels</li>
-        </ul>
-    </sms-valentin>
-    <sms-valentin again>
-        for the 3rd step, the library
-        <a href="https://github.com/fogleman/gg" target="_blank">fogleman/gg</a>
-        uses the
-        <a href="https://pkg.go.dev/golang.org/x/image@v0.0.0-20201208152932-35266b937fa6/draw#BiLinear" target="_blank">BiLinear</a>
-        transformer, which is officially "slow" and incurs a lot of 
-        <a href="https://golang.org/pkg/image/color/#NRGBA" target="_blank">NRGBA</a> 
-        /
-        <a href="https://golang.org/pkg/image/color/#RGBA" target="_blank">RGBA</a>
-        computations
-        <img src="static/img/pprof_3.png" />
-        The choice of the BiLinear kernel in gg is not configurable.
-    </sms-valentin>
-    <sms-valentin again>
-        I thought that mixing "non-alpha-premultiplied" with "alpha-premultiplied" might
-        incur some arithmetic extra burden. Then I realized BiLinear was the problem.
-        <br/>
-        Even if there's no option for that, the library is open source so we could hack
-        it to use e.g. 
-        <a href="https://pkg.go.dev/golang.org/x/image@v0.0.0-20201208152932-35266b937fa6/draw#ApproxBiLinear" target="_blank">ApproxBiLinear</a>
-        instead and see if the quality is high enough
-    </sms-valentin>
-    <sms-ankur>
-        That's an interesting rabbit hole
-    </sms-ankur>
-    <sms-ankur again>
-        You know what? Choosing the background color is not a core feature of
-        my website. I can totally live with a default background color "baked" into the 
-        original model card PNG, instead of doing that dynamically each time.
-    </sms-ankur>
-    <sms-valentin>
-        or maybe 3 or 4 variants of the PNG with different pre-baked background colors
-    </sms-valentin>
-    <div class=break> </div>
-    <sms-ankur>
-        Hey, I deployed to Cloud Run with these optimizations:
-        baked in background color, alternative JPEG encoder
-    </sms-ankur>
-    <sms-ankur>
-        It's way faster now! 🎉
-        <br/>
-        Thank you for your help!
-    </sms-ankur>
-    <sms-valentin>
-        🥳
-    </sms-valentin>
+    <div class="conversation">
+        <sms-ankur>
+            Hey Valentin, I've heard you're into Go and performance
+        </sms-ankur>
+        <sms-ankur again>
+            would you take a look at my HOTAS image processing? Only if you have a bit of spare time.
+        </sms-ankur>
+        <sms-valentin>
+            Hi Ankur
+        </sms-valentin>
+        <sms-valentin again>
+            What's HOTAS?
+        </sms-valentin>
+        <sms-ankur>
+            Hands on throttle and stick - they're controllers used in flight simulator games. My app generates HOTAS
+            reference images on-the-fly, server-side.
+        </sms-ankur>
+        <sms-ankur again>
+            <img src="static/img/metarefcard.jpg" />
+        </sms-ankur>
+        <sms-valentin>
+            Oooh very cool. Sure, I'd be happy to help.
+        </sms-valentin>
+        <sms-ankur>
+            The repo is here
+            <a href="https://github.com/ankurkotwal/MetaRefCard" target="_blank">
+                github.com/ankurkotwal/MetaRefCard
+            </a>
+        </sms-ankur>
+        <sms-ankur again>
+            I'm worried about a memory leak as the memory seems to grow but not shrink.
+        </sms-ankur>
+        <sms-ankur again>
+            Also the image generation is kinda slow, which incurs a midly annoying user-facing latency.
+        </sms-ankur>
+        <sms-valentin>
+            Ooh I see you've already written idiomatic tests and benchmarks! That's awesome,
+            it will make performance exploration much more straightforward 📈
+        </sms-valentin>
+        <sms-ankur>
+            I've run tests with
+            <a href="https://blog.golang.org/pprof" target="_blank">Pprof</a>,
+            generated some call graphs... but its still not crystal clear for me.
+        </sms-ankur>
+        <sms-ankur again>
+            Before I deploy to Cloud Run, I need to check if the image generation is likely to
+            <a href="https://en.wikipedia.org/wiki/Out_of_memory" target="_blank">OOM</a>
+            the regular instance available memory.
+            <img src="static/img/cloud_run_memory.png" />
+        </sms-ankur>
+        <sms-ankur again>
+            I could pay more to have several GB, however a memory leak would still crash the instance eventually 🙄
+        </sms-ankur>
+        <sms-valentin>
+            OK, let's tackle this from 2 sides.
+            I'll read the code and try to reproduce the memory leak on my workstation.
+        </sms-valentin>
+        <sms-valentin again>
+            Meanwhile could you deploy to Cloud Run (low memory), launch a few dozen requests, and see if you actually
+            experience any failures?
+        </sms-valentin>
+        <sms-ankur>
+            👌 Thank you!
+        </sms-ankur>
+        <div class=break> </div>
+        <sms-valentin>
+            So, I ran the tests with the -race flag, turns out there are some data races in the lazy init logic. I
+            opened a
+            <a href="https://github.com/ankurkotwal/MetaRefCard/pull/4/files" target="_blank">PR</a>
+            .
+        </sms-valentin>
+        <sms-valentin again>
+            It's a cultural thing in Go, if a program has data races, we pedantically regard it as broken 😂
+            <br />
+            We want to fix the races before improving anything else
+        </sms-valentin>
+        <sms-valentin again>
+            in this case,
+            <a href="https://golang.org/pkg/sync/#Once" target="_blank">sync.Once</a>
+            and
+            <a href="https://golang.org/pkg/sync/#Map" target="_blank">sync.Map</a>
+            come to the rescue
+        </sms-valentin>
+        <sms-ankur>
+            Ah! Thanks, I'll merge it
+        </sms-ankur>
+        <sms-valentin>
+            When requests are processed sequentially, there doesn't seem to be any big memory usage.
+            E.g. this is using the
+            <a href="https://making.pusher.com/go-tool-trace/" target="_blank">Trace viewer</a>,
+            it never gets above 20MB
+            <img src="static/img/trace_seq_small_mem.png" />
+        </sms-valentin>
+        <sms-ankur>
+            Correct. The problem occurs when requests are processed concurrently
+        </sms-ankur>
+        <sms-ankur>
+            Which may happen often in production, as each request is taking several seconds to complete
+        </sms-ankur>
+        <sms-valentin>
+            Indeed when I launch a burst of 50 concurrent requests, I can see the memory usage
+            climbing to 750MB
+            <img src="static/img/trace_conc_high_mem.png" />
+        </sms-valentin>
+        <sms-valentin again>
+            You know, sometimes the Go runtime allocates large chunks of memory that you actually need and
+            doesn't give them back quickly to the OS, and that's mostly OK? This doesn't
+            always mean your code has any memory leak.
+        </sms-valentin>
+        <sms-valentin again>
+            Even if we
+            <a href="https://golang.org/pkg/runtime/#GC" target="_blank">explicitly trigger</a>
+            the garbage collection after each request, often the program doesn't
+            seems to release any memory...
+        </sms-valentin>
+        <sms-valentin again>
+            As long as you don't OOM, it's fine if your program is occupying more memory than
+            the amount your code's objects are actually using. It has some leeway. Maybe trust the GC? 🤷
+            <img src="static/img/heap_detail.png" />
+        </sms-valentin>
+        <sms-ankur>
+            I found this very suspicious at first, but okay I'll let the OS and the Go runtime
+            haggle over the memory heap, and hope for the best!
+        </sms-ankur>
+        <sms-ankur again>
+            Also I haven't noticed any OOM in Cloud Run so far, this is going good 🤞
+        </sms-ankur>
+        <div class=break> </div>
+        <sms-valentin>
+            I had a look at the latency problem
+        </sms-valentin>
+        <sms-valentin again>
+            You're drawing multiple text labels on the image in rectangles that don't
+            overlap, so I thought of doing that concurrently
+        </sms-valentin>
+        <sms-ankur>
+            Nah, I thought the same, unfortunately the
+            <a href="https://pkg.go.dev/golang.org/x/image@v0.0.0-20201208152932-35266b937fa6/font#Face"
+                target="_blank">Font Face</a>
+            objects are not thread-safe.
+            And we don't even need to try harder with more clunky synchronization patterns,
+            because the text drawing is actually not the bottleneck.
+        </sms-ankur>
+        <sms-valentin>
+            You're 100% right, we must focus on the actual bottlenecks, and "writing the
+            characters' pixels in the labels" is not one of them.
+        </sms-valentin>
+        <sms-valentin again>
+            So, this is our CPU profile
+            <img src="static/img/pprof_overview.png" />
+        </sms-valentin>
+        <sms-valentin again>
+            18% of the total CPU time is spent encoding to JPEG.
+        </sms-valentin>
+        <sms-valentin again>
+            Did you know about the drop-in encoder replacement
+            <a href="https://github.com/pixiv/go-libjpeg/tree/master/jpeg">
+                github.com/pixiv/go-libjpeg/jpeg
+            </a>? It can encode 5 times as fast, shaving 15% of the total time. That's a quick win 😉
+        </sms-valentin>
+        <sms-valentin again>
+            Updated CPU profile
+            <img src="static/img/pprof_2.png" />
+        </sms-valentin>
+        <sms-valentin again>
+            Now trying to figure out why so much time (15s) is sunk in generateImages, while
+            (decode image + draw labels + encode image) is only (3s + 1.1s + 0.6s) = 4.7s...
+        </sms-valentin>
+        <sms-valentin again>
+            Allright, here's what's going on.
+            <br />
+            You have a configurable background color, so the process is
+            <ul>
+                <li>create a blank RGBA image</li>
+                <li>fill it with the custom background color</li>
+                <li>draw the card model PNG on top (it has transparency)</li>
+                <li>draw the card text labels</li>
+            </ul>
+        </sms-valentin>
+        <sms-valentin again>
+            for the 3rd step, the library
+            <a href="https://github.com/fogleman/gg" target="_blank">fogleman/gg</a>
+            uses the
+            <a href="https://pkg.go.dev/golang.org/x/image@v0.0.0-20201208152932-35266b937fa6/draw#BiLinear"
+                target="_blank">BiLinear</a>
+            transformer, which is officially "slow" and incurs a lot of
+            <a href="https://golang.org/pkg/image/color/#NRGBA" target="_blank">NRGBA</a>
+            /
+            <a href="https://golang.org/pkg/image/color/#RGBA" target="_blank">RGBA</a>
+            computations
+            <img src="static/img/pprof_3.png" />
+            The choice of the BiLinear kernel in gg is not configurable.
+        </sms-valentin>
+        <sms-valentin again>
+            I thought that mixing "non-alpha-premultiplied" with "alpha-premultiplied" might
+            incur some arithmetic extra burden. Then I realized BiLinear was the problem.
+            <br />
+            Even if there's no option for that, the library is open source so we could hack
+            it to use e.g.
+            <a href="https://pkg.go.dev/golang.org/x/image@v0.0.0-20201208152932-35266b937fa6/draw#ApproxBiLinear"
+                target="_blank">ApproxBiLinear</a>
+            instead and see if the quality is high enough
+        </sms-valentin>
+        <sms-ankur>
+            That's an interesting rabbit hole
+        </sms-ankur>
+        <sms-ankur again>
+            You know what? Choosing the background color is not a core feature of
+            my website. I can totally live with a default background color "baked" into the
+            original model card PNG, instead of doing that dynamically each time.
+        </sms-ankur>
+        <sms-valentin>
+            or maybe 3 or 4 variants of the PNG with different pre-baked background colors
+        </sms-valentin>
+        <div class=break> </div>
+        <sms-ankur>
+            Hey, I deployed to Cloud Run with these optimizations:
+            baked in background color, alternative JPEG encoder
+        </sms-ankur>
+        <sms-ankur>
+            It's way faster now! 🎉
+            <br />
+            Thank you for your help!
+        </sms-ankur>
+        <sms-valentin>
+            🥳
+        </sms-valentin>
 
 
 
-    <script src="static/basiclightbox/basicLightbox.min.js"></script>
-    <script src="static/script.js"></script>
-</div>
+        <script src="static/basiclightbox/basicLightbox.min.js"></script>
+        <script src="static/script.js"></script>
+    </div>
 </body>
+
 </html>
